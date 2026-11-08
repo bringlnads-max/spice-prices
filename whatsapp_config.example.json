@@ -1,0 +1,7 @@
+{
+  "send": "daily",
+  "recipients": [
+    { "name": "Papa", "phone": "+91XXXXXXXXXX", "apikey": "PUT_CALLMEBOT_APIKEY_HERE" },
+    { "name": "Me",   "phone": "+91XXXXXXXXXX", "apikey": "PUT_CALLMEBOT_APIKEY_HERE" }
+  ]
+}

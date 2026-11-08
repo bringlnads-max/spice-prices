@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spice Price Tracker</title>
+<meta name="description" content="Daily cardamom auction and black pepper market prices with trends and alerts.">
+<meta name="theme-color" content="#1a4d2e">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Spice Prices">
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --border: rgba(11,11,11,0.10);
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --accent-wash: rgba(42,120,214,0.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #f0efec;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --border: rgba(255,255,255,0.10);
+      --series-1: #3987e5;
+      --series-2: #d95926;
+      --accent-wash: rgba(57,135,229,0.14);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --series-1: #3987e5; --series-2: #d95926; --accent-wash: rgba(57,135,229,0.14);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--ink);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 20px 16px 48px; }
+  header h1 { margin: 0; font-size: 24px; letter-spacing: -0.01em; }
+  header p { margin: 4px 0 0; color: var(--ink-2); font-size: 14px; }
+  h2 { font-size: 16px; margin: 0 0 2px; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px;
+  }
+  section { margin-top: 20px; }
+
+  /* alerts */
+  .alerts { display: grid; gap: 8px; }
+  .alert { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; }
+  .alert .icon {
+    flex: none; width: 28px; height: 28px; border-radius: 50%;
+    display: grid; place-items: center; font-size: 14px; font-weight: 700;
+    background: var(--accent-wash); color: var(--ink);
+  }
+  .alert b { display: block; font-size: 15px; }
+  .alert span { color: var(--ink-2); font-size: 14px; }
+  .alert .tag { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .none { color: var(--ink-2); }
+
+  /* stat tiles */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .tile .name { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .tile .where { color: var(--muted); font-size: 13px; }
+  .tile .value { font-size: 32px; font-weight: 700; margin: 8px 0 2px; letter-spacing: -0.01em; }
+  .tile .value small { font-size: 15px; font-weight: 500; color: var(--ink-2); }
+  .tile .date { color: var(--ink-2); font-size: 13px; }
+  .tile dl { margin: 12px 0 0; display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; font-size: 14px; }
+  .tile dt { color: var(--ink-2); }
+  .tile dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+  /* range control */
+  .toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-top: 24px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 10px; padding: 3px; background: var(--surface); }
+  .seg button {
+    border: 0; background: transparent; color: var(--ink-2); font: inherit; font-weight: 600;
+    padding: 6px 14px; border-radius: 7px; cursor: pointer; min-height: 36px;
+  }
+  .seg button[aria-pressed="true"] { background: var(--accent-wash); color: var(--ink); }
+
+  .charts { display: grid; gap: 12px; }
+  .chart-box { position: relative; height: 280px; }
+  .chart-box.short { height: 180px; }
+
+  /* table */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--ink-2); font-weight: 600; font-size: 13px; }
+  td.na { color: var(--muted); }
+
+  footer { margin-top: 24px; color: var(--muted); font-size: 13px; }
+  footer p { margin: 6px 0; }
+  a { color: var(--series-1); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Spice Price Tracker</h1>
+    <p>Small cardamom e-auctions and Kochi black pepper rates · Updated <span id="updated"></span></p>
+  </header>
+
+  <section>
+    <h2>Alerts</h2>
+    <div id="alerts" class="alerts"></div>
+  </section>
+
+  <section>
+    <div id="tiles" class="tiles"></div>
+  </section>
+
+  <div class="toolbar">
+    <h2 style="margin:0">Price trends</h2>
+    <div class="seg" role="group" aria-label="Time range" id="range">
+      <button data-days="30">1M</button>
+      <button data-days="90" aria-pressed="true">3M</button>
+      <button data-days="182">6M</button>
+      <button data-days="365">1Y</button>
+    </div>
+  </div>
+
+  <section class="charts">
+    <div class="card">
+      <h2>Small cardamom: auction average price</h2>
+      <p class="sub">₹ per kg, weighted by quantity sold across the day's e-auctions</p>
+      <div class="chart-box"><canvas id="cardamomChart" aria-label="Cardamom average auction price chart" role="img"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Small cardamom: arrivals at auction</h2>
+      <p class="sub">Tonnes arriving per auction day. Heavy arrivals often pull prices down</p>
+      <div class="chart-box short"><canvas id="arrivalsChart" aria-label="Cardamom arrivals chart" role="img"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Black pepper: Kochi market rate</h2>
+      <p class="sub">₹ per kg, garbled and ungarbled</p>
+      <div class="chart-box"><canvas id="pepperChart" aria-label="Black pepper price chart" role="img"></canvas></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Last 20 days</h2>
+    <p class="sub">All prices ₹ per kg</p>
+    <div class="table-wrap"><table id="recent"></table></div>
+  </section>
+
+  <footer>
+    <p>Source: <a href="https://www.indianspices.com/marketing/price/domestic/daily-price.html" target="_blank" rel="noopener">Spices Board of India</a>. Prices are indicative market data, useful for spotting trends.</p>
+    <p>The cardamom figure is the average of all auction lots across every size and grade. Your 7 mm or 8 mm bold buying rate will be different, but it usually moves in the same direction.</p>
+  </footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+const D = __DATA__;
+
+const $ = (id) => document.getElementById(id);
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const rupee = (v) => v == null ? "–" : "₹" + Math.round(v).toLocaleString("en-IN");
+const parseDate = (s) => new Date(s + "T00:00:00");
+const shortDate = (s) => parseDate(s).toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+const longDate = (s) => parseDate(s).toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+$("updated").textContent = D.generated;
+
+/* ---- alerts ---- */
+(function renderAlerts() {
+  const box = $("alerts");
+  if (!D.alerts.length) {
+    box.innerHTML = '<div class="card alert"><div class="icon" aria-hidden="true">✓</div><div><b>No alerts today</b><span>Prices are moving within normal limits.</span></div></div>';
+    return;
+  }
+  const icon = { up: "▲", down: "▼", info: "i" };
+  const tag = { up: "Price rising", down: "Price falling", info: "Note" };
+  box.innerHTML = D.alerts.map((a) => `
+    <div class="card alert">
+      <div class="icon" aria-hidden="true">${icon[a.kind] || "i"}</div>
+      <div><div class="tag">${tag[a.kind] || "Note"}</div><b>${esc(a.title)}</b><span>${esc(a.detail)}</span></div>
+    </div>`).join("");
+})();
+
+/* ---- stat tiles ---- */
+function change(cur, ref) {
+  if (cur == null || ref == null) return "–";
+  const diff = cur - ref, p = (diff / ref) * 100;
+  if (Math.round(diff) === 0) return "no change";
+  const arrow = diff > 0 ? "▲" : "▼";
+  return `${arrow} ${rupee(Math.abs(diff))} (${Math.abs(p).toFixed(1)}%)`;
+}
+(function renderTiles() {
+  const defs = [
+    { key: "cardamom", name: "Small Cardamom", where: "E-auction average · Kerala / TN", color: "--series-1" },
+    { key: "pepper_garbled", name: "Black Pepper · Garbled", where: "Kochi market rate", color: "--series-1" },
+    { key: "pepper_ungarbled", name: "Black Pepper · Ungarbled", where: "Kochi market rate", color: "--series-2" },
+  ];
+  $("tiles").innerHTML = defs.map((d) => {
+    const s = D.summary[d.key];
+    if (!s) return `<div class="card tile"><div class="name">${d.name}</div><p class="none">No data yet.</p></div>`;
+    return `
+      <div class="card tile">
+        <div class="name"><span class="swatch" style="background:var(${d.color})"></span>${d.name}</div>
+        <div class="where">${d.where}</div>
+        <div class="value">${rupee(s.value)} <small>/ kg</small></div>
+        <div class="date">${longDate(s.date)}</div>
+        <dl>
+          <dt>vs previous day</dt><dd>${change(s.value, s.prev)}</dd>
+          <dt>vs 1 week ago</dt><dd>${change(s.value, s.w)}</dd>
+          <dt>vs 1 month ago</dt><dd>${change(s.value, s.m)}</dd>
+        </dl>
+      </div>`;
+  }).join("");
+})();
+
+/* ---- recent table ---- */
+(function renderTable() {
+  const byDate = {};
+  D.cardamom.forEach((r) => (byDate[r.date] = { ...(byDate[r.date] || {}), c: r }));
+  D.pepper.forEach((r) => (byDate[r.date] = { ...(byDate[r.date] || {}), p: r }));
+  const dates = Object.keys(byDate).sort().reverse().slice(0, 20);
+  const cell = (v, f) => v == null ? '<td class="na">–</td>' : `<td>${f(v)}</td>`;
+  $("recent").innerHTML =
+    "<thead><tr><th>Date</th><th>Cardamom avg</th><th>Cardamom max</th><th>Arrivals (t)</th><th>Pepper garbled</th><th>Pepper ungarbled</th></tr></thead><tbody>" +
+    dates.map((d) => {
+      const c = byDate[d].c || {}, p = byDate[d].p || {};
+      return `<tr><td>${longDate(d)}</td>${cell(c.avg, rupee)}${cell(c.max, rupee)}${cell(c.arrived, (v) => (v / 1000).toFixed(1))}${cell(p.garbled, rupee)}${cell(p.ungarbled, rupee)}</tr>`;
+    }).join("") + "</tbody>";
+})();
+
+/* ---- charts ---- */
+let charts = [];
+let rangeDays = 90;
+
+function inRange(rows) {
+  if (!rows.length) return rows;
+  const last = parseDate(rows[rows.length - 1].date);
+  const cutoff = new Date(last); cutoff.setDate(cutoff.getDate() - rangeDays);
+  return rows.filter((r) => parseDate(r.date) >= cutoff);
+}
+
+function baseOptions(yFormat, tooltipValue) {
+  return {
+    responsive: true, maintainAspectRatio: false, animation: false,
+    interaction: { mode: "index", intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: css("--surface"), titleColor: css("--ink"), bodyColor: css("--ink-2"),
+        borderColor: css("--axis"), borderWidth: 1, padding: 10, boxPadding: 4, usePointStyle: true,
+        callbacks: { label: (ctx) => ` ${ctx.dataset.label}: ${tooltipValue(ctx.parsed.y)}` },
+      },
+    },
+    scales: {
+      x: { grid: { display: false }, border: { color: css("--axis") },
+           ticks: { color: css("--muted"), maxRotation: 0, autoSkip: true, maxTicksLimit: 7 } },
+      y: { grid: { color: css("--grid") }, border: { display: false },
+           ticks: { color: css("--muted"), callback: yFormat, maxTicksLimit: 6 } },
+    },
+  };
+}
+
+function line(label, data, color) {
+  return { label, data, borderColor: color, backgroundColor: color, borderWidth: 2, tension: 0,
+           pointRadius: 0, pointHoverRadius: 5, pointHoverBorderWidth: 2,
+           pointHoverBorderColor: css("--surface"), spanGaps: true };
+}
+
+function drawCharts() {
+  charts.forEach((c) => c.destroy());
+  charts = [];
+  Chart.defaults.font.family = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+  const s1 = css("--series-1"), s2 = css("--series-2");
+
+  const c = inRange(D.cardamom);
+  const cOpts = baseOptions((v) => "₹" + v.toLocaleString("en-IN"), rupee);
+  cOpts.plugins.tooltip.callbacks.title = (items) => longDate(c[items[0].dataIndex].date);
+  charts.push(new Chart($("cardamomChart"), {
+    type: "line",
+    data: { labels: c.map((r) => shortDate(r.date)), datasets: [line("Auction average", c.map((r) => r.avg), s1)] },
+    options: cOpts,
+  }));
+
+  const aOpts = baseOptions((v) => v + " t", (v) => v.toFixed(1) + " tonnes");
+  aOpts.plugins.tooltip.callbacks.title = (items) => longDate(c[items[0].dataIndex].date);
+  aOpts.scales.y.beginAtZero = true;
+  charts.push(new Chart($("arrivalsChart"), {
+    type: "bar",
+    data: { labels: c.map((r) => shortDate(r.date)),
+            datasets: [{ label: "Arrivals", data: c.map((r) => r.arrived / 1000), backgroundColor: s1,
+                         borderRadius: { topLeft: 4, topRight: 4 }, borderSkipped: "start",
+                         maxBarThickness: 14, categoryPercentage: 0.85, barPercentage: 0.9 }] },
+    options: aOpts,
+  }));
+
+  const p = inRange(D.pepper);
+  const pOpts = baseOptions((v) => "₹" + v.toLocaleString("en-IN"), rupee);
+  pOpts.plugins.tooltip.callbacks.title = (items) => longDate(p[items[0].dataIndex].date);
+  pOpts.plugins.legend = { display: true, position: "top", align: "start",
+    labels: { color: css("--ink-2"), usePointStyle: true, pointStyle: "rectRounded", boxWidth: 10, boxHeight: 10 } };
+  charts.push(new Chart($("pepperChart"), {
+    type: "line",
+    data: { labels: p.map((r) => shortDate(r.date)),
+            datasets: [line("Garbled", p.map((r) => r.garbled), s1), line("Ungarbled", p.map((r) => r.ungarbled), s2)] },
+    options: pOpts,
+  }));
+}
+
+$("range").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  rangeDays = +b.dataset.days;
+  [...$("range").children].forEach((x) => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+  try { localStorage.setItem("spiceRange", rangeDays); } catch (_) {}
+  drawCharts();
+});
+try {
+  const saved = +localStorage.getItem("spiceRange");
+  const btn = saved && $("range").querySelector(`[data-days="${saved}"]`);
+  if (btn) { rangeDays = saved; [...$("range").children].forEach((x) => x.setAttribute("aria-pressed", x === btn ? "true" : "false")); }
+} catch (_) {}
+
+if (window.Chart) {
+  drawCharts();
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", drawCharts);
+} else {
+  document.querySelectorAll(".chart-box").forEach((b) => (b.innerHTML = '<p class="none">Charts need an internet connection. The table below still works.</p>'));
+}
+
+/* offline support when opened as an installed app (only on https, not when opened as a local file) */
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+</script>
+</body>
+</html>

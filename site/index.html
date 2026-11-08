@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spice Price Tracker</title>
+<meta name="description" content="Daily cardamom auction and black pepper market prices with trends and alerts.">
+<meta name="theme-color" content="#1a4d2e">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Spice Prices">
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --border: rgba(11,11,11,0.10);
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --accent-wash: rgba(42,120,214,0.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #f0efec;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --border: rgba(255,255,255,0.10);
+      --series-1: #3987e5;
+      --series-2: #d95926;
+      --accent-wash: rgba(57,135,229,0.14);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --series-1: #3987e5; --series-2: #d95926; --accent-wash: rgba(57,135,229,0.14);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--ink);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 20px 16px 48px; }
+  header h1 { margin: 0; font-size: 24px; letter-spacing: -0.01em; }
+  header p { margin: 4px 0 0; color: var(--ink-2); font-size: 14px; }
+  h2 { font-size: 16px; margin: 0 0 2px; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px;
+  }
+  section { margin-top: 20px; }
+
+  /* alerts */
+  .alerts { display: grid; gap: 8px; }
+  .alert { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; }
+  .alert .icon {
+    flex: none; width: 28px; height: 28px; border-radius: 50%;
+    display: grid; place-items: center; font-size: 14px; font-weight: 700;
+    background: var(--accent-wash); color: var(--ink);
+  }
+  .alert b { display: block; font-size: 15px; }
+  .alert span { color: var(--ink-2); font-size: 14px; }
+  .alert .tag { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .none { color: var(--ink-2); }
+
+  /* stat tiles */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .tile .name { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .tile .where { color: var(--muted); font-size: 13px; }
+  .tile .value { font-size: 32px; font-weight: 700; margin: 8px 0 2px; letter-spacing: -0.01em; }
+  .tile .value small { font-size: 15px; font-weight: 500; color: var(--ink-2); }
+  .tile .date { color: var(--ink-2); font-size: 13px; }
+  .tile dl { margin: 12px 0 0; display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; font-size: 14px; }
+  .tile dt { color: var(--ink-2); }
+  .tile dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+  /* range control */
+  .toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-top: 24px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 10px; padding: 3px; background: var(--surface); }
+  .seg button {
+    border: 0; background: transparent; color: var(--ink-2); font: inherit; font-weight: 600;
+    padding: 6px 14px; border-radius: 7px; cursor: pointer; min-height: 36px;
+  }
+  .seg button[aria-pressed="true"] { background: var(--accent-wash); color: var(--ink); }
+
+  .charts { display: grid; gap: 12px; }
+  .chart-box { position: relative; height: 280px; }
+  .chart-box.short { height: 180px; }
+
+  /* table */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--ink-2); font-weight: 600; font-size: 13px; }
+  td.na { color: var(--muted); }
+
+  footer { margin-top: 24px; color: var(--muted); font-size: 13px; }
+  footer p { margin: 6px 0; }
+  a { color: var(--series-1); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Spice Price Tracker</h1>
+    <p>Small cardamom e-auctions and Kochi black pepper rates · Updated <span id="updated"></span></p>
+  </header>
+
+  <section>
+    <h2>Alerts</h2>
+    <div id="alerts" class="alerts"></div>
+  </section>
+
+  <section>
+    <div id="tiles" class="tiles"></div>
+  </section>
+
+  <div class="toolbar">
+    <h2 style="margin:0">Price trends</h2>
+    <div class="seg" role="group" aria-label="Time range" id="range">
+      <button data-days="30">1M</button>
+      <button data-days="90" aria-pressed="true">3M</button>
+      <button data-days="182">6M</button>
+      <button data-days="365">1Y</button>
+    </div>
+  </div>
+
+  <section class="charts">
+    <div class="card">
+      <h2>Small cardamom: auction average price</h2>
+      <p class="sub">₹ per kg, weighted by quantity sold across the day's e-auctions</p>
+      <div class="chart-box"><canvas id="cardamomChart" aria-label="Cardamom average auction price chart" role="img"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Small cardamom: arrivals at auction</h2>
+      <p class="sub">Tonnes arriving per auction day. Heavy arrivals often pull prices down</p>
+      <div class="chart-box short"><canvas id="arrivalsChart" aria-label="Cardamom arrivals chart" role="img"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Black pepper: Kochi market rate</h2>
+      <p class="sub">₹ per kg, garbled and ungarbled</p>
+      <div class="chart-box"><canvas id="pepperChart" aria-label="Black pepper price chart" role="img"></canvas></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Last 20 days</h2>
+    <p class="sub">All prices ₹ per kg</p>
+    <div class="table-wrap"><table id="recent"></table></div>
+  </section>
+
+  <footer>
+    <p>Source: <a href="https://www.indianspices.com/marketing/price/domestic/daily-price.html" target="_blank" rel="noopener">Spices Board of India</a>. Prices are indicative market data, useful for spotting trends.</p>
+    <p>The cardamom figure is the average of all auction lots across every size and grade. Your 7 mm or 8 mm bold buying rate will be different, but it usually moves in the same direction.</p>
+  </footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+const D = {"generated":"07 Nov 2026, 04:49 PM","cardamom":[{"date":"2025-11-06","avg":2498.66,"max":3208.0,"min":2204.0,"arrived":217510.4,"sold":213319.9,"auctions":2},{"date":"2025-11-07","avg":2505.6,"max":3341.0,"min":2239.0,"arrived":141405.9,"sold":140007.1,"auctions":2},{"date":"2025-11-08","avg":2486.45,"max":3208.0,"min":2074.0,"arrived":214652.1,"sold":209932.2,"auctions":2},{"date":"2025-11-10","avg":2478.38,"max":2790.0,"min":1846.0,"arrived":172963.1,"sold":167543.2,"auctions":2},{"date":"2025-11-11","avg":2449.56,"max":3011.0,"min":1660.0,"arrived":189529.9,"sold":180182.40000000002,"auctions":2},{"date":"2025-11-12","avg":2439.37,"max":2759.0,"min":2152.0,"arrived":133748.8,"sold":133748.8,"auctions":2},{"date":"2025-11-13","avg":2457.28,"max":3019.0,"min":2202.0,"arrived":233024.6,"sold":229296.59999999998,"auctions":2},{"date":"2025-11-14","avg":2430.78,"max":2736.0,"min":2140.0,"arrived":203993.6,"sold":196837.09999999998,"auctions":2},{"date":"2025-11-15","avg":2401.17,"max":2746.0,"min":2094.0,"arrived":147950.7,"sold":144315.2,"auctions":2},{"date":"2025-11-17","avg":2413.09,"max":3150.0,"min":2170.0,"arrived":178561.8,"sold":176666.1,"auctions":2},{"date":"2025-11-18","avg":2450.47,"max":3201.0,"min":2248.0,"arrived":199958.6,"sold":198365.4,"auctions":2},{"date":"2025-11-19","avg":2449.99,"max":2889.0,"min":2221.0,"arrived":156806.5,"sold":154963.6,"auctions":2},{"date":"2025-11-20","avg":2490.11,"max":2912.0,"min":2226.0,"arrived":113888.8,"sold":113039.1,"auctions":2},{"date":"2025-11-21","avg":2508.15,"max":3309.0,"min":1656.0,"arrived":203666.8,"sold":197830.6,"auctions":2},{"date":"2025-11-22","avg":2444.21,"max":2778.0,"min":2162.0,"arrived":124343.70000000001,"sold":120643.4,"auctions":2},{"date":"2025-11-24","avg":2436.04,"max":2771.0,"min":2202.0,"arrived":207975.7,"sold":199656.5,"auctions":2},{"date":"2025-11-25","avg":2395.32,"max":2880.0,"min":2087.0,"arrived":183876.7,"sold":174977.8,"auctions":2},{"date":"2025-11-26","avg":2389.6,"max":3156.0,"min":2006.0,"arrived":144926.4,"sold":138235.8,"auctions":2},{"date":"2025-11-27","avg":2383.82,"max":3176.0,"min":2140.0,"arrived":210303.40000000002,"sold":199491.1,"auctions":2},{"date":"2025-11-28","avg":2377.67,"max":2967.0,"min":2094.0,"arrived":165273.59999999998,"sold":160705.8,"auctions":2},{"date":"2025-11-29","avg":2417.11,"max":3153.0,"min":2162.0,"arrived":100434.4,"sold":97207.0,"auctions":2},{"date":"2025-12-01","avg":2406.85,"max":2749.0,"min":2130.0,"arrived":65302.3,"sold":65302.3,"auctions":2},{"date":"2025-12-02","avg":2378.88,"max":3182.0,"min":2104.0,"arrived":179466.59999999998,"sold":176284.9,"auctions":2},{"date":"2025-12-03","avg":2394.78,"max":2760.0,"min":2100.0,"arrived":126309.8,"sold":124458.8,"auctions":2},{"date":"2025-12-04","avg":2416.06,"max":3102.0,"min":2139.0,"arrived":104818.9,"sold":97309.79999999999,"auctions":2},{"date":"2025-12-05","avg":2378.68,"max":3184.0,"min":2038.0,"arrived":168502.2,"sold":167504.59999999998,"auctions":2},{"date":"2025-12-06","avg":2399.17,"max":2749.0,"min":2092.0,"arrived":157845.2,"sold":154572.0,"auctions":2},{"date":"2025-12-08","avg":2364.92,"max":2990.0,"min":2123.0,"arrived":107188.29999999999,"sold":101486.1,"auctions":2},{"date":"2025-12-10","avg":2398.53,"max":2812.0,"min":2136.0,"arrived":117144.5,"sold":116662.29999999999,"auctions":2},{"date":"2025-12-11","avg":2402.28,"max":3302.0,"min":2002.0,"arrived":187199.8,"sold":183231.09999999998,"auctions":2},{"date":"2025-12-12","avg":2383.76,"max":2852.0,"min":2070.0,"arrived":101091.5,"sold":99963.3,"auctions":2},{"date":"2025-12-13","avg":2390.04,"max":2920.0,"min":2104.0,"arrived":160249.1,"sold":158653.8,"auctions":2},{"date":"2025-12-15","avg":2428.42,"max":2868.0,"min":2120.0,"arrived":128786.4,"sold":127287.4,"auctions":2},{"date":"2025-12-16","avg":2454.96,"max":3291.0,"min":2017.0,"arrived":119779.9,"sold":117691.79999999999,"auctions":2},{"date":"2025-12-17","avg":2428.22,"max":3488.0,"min":1987.0,"arrived":165003.5,"sold":163892.8,"auctions":2},{"date":"2025-12-18","avg":2431.23,"max":3028.0,"min":2202.0,"arrived":177166.4,"sold":175646.5,"auctions":2},{"date":"2025-12-19","avg":2445.42,"max":3454.0,"min":2009.0,"arrived":130418.6,"sold":126904.4,"auctions":2},{"date":"2025-12-20","avg":2433.2,"max":2818.0,"min":2080.0,"arrived":121003.9,"sold":120407.6,"auctions":2},{"date":"2025-12-22","avg":2479.36,"max":3264.0,"min":2068.0,"arrived":222304.09999999998,"sold":206491.5,"auctions":2},{"date":"2025-12-23","avg":2430.83,"max":2801.0,"min":1998.0,"arrived":190202.6,"sold":186818.9,"auctions":2},{"date":"2025-12-24","avg":2410.44,"max":2856.0,"min":2152.0,"arrived":127922.9,"sold":107435.5,"auctions":2},{"date":"2025-12-26","avg":2428.28,"max":3218.0,"min":2095.0,"arrived":173385.40000000002,"sold":169404.8,"auctions":2},{"date":"2025-12-27","avg":2465.54,"max":3395.0,"min":2110.0,"arrived":183632.0,"sold":181046.1,"auctions":2},{"date":"2025-12-29","avg":2425.92,"max":2945.0,"min":1902.0,"arrived":93369.6,"sold":88849.9,"auctions":2},{"date":"2025-12-30","avg":2456.52,"max":3038.0,"min":2159.0,"arrived":105862.2,"sold":105056.9,"auctions":2},{"date":"2025-12-31","avg":2478.31,"max":3502.0,"min":1942.0,"arrived":187948.3,"sold":184189.4,"auctions":2},{"date":"2026-01-01","avg":2454.13,"max":3212.0,"min":1975.0,"arrived":83919.4,"sold":83200.6,"auctions":2},{"date":"2026-01-02","avg":2463.6,"max":3002.0,"min":2052.0,"arrived":181497.9,"sold":179976.7,"auctions":2},{"date":"2026-01-03","avg":2516.21,"max":3326.0,"min":2002.0,"arrived":139597.6,"sold":138698.9,"auctions":2},{"date":"2026-01-05","avg":2542.01,"max":3413.0,"min":2240.0,"arrived":131139.8,"sold":129421.4,"auctions":2},{"date":"2026-01-06","avg":2507.85,"max":3443.0,"min":2078.0,"arrived":182402.7,"sold":180783.8,"auctions":2},{"date":"2026-01-07","avg":2521.51,"max":3076.0,"min":2178.0,"arrived":169925.4,"sold":168797.0,"auctions":2},{"date":"2026-01-08","avg":2527.1,"max":2978.0,"min":2209.0,"arrived":135016.5,"sold":130826.5,"auctions":2},{"date":"2026-01-09","avg":2547.43,"max":2956.0,"min":2246.0,"arrived":118588.1,"sold":118171.9,"auctions":2},{"date":"2026-01-10","avg":2564.42,"max":3337.0,"min":2193.0,"arrived":253688.4,"sold":251672.1,"auctions":2},{"date":"2026-01-12","avg":2527.09,"max":3177.0,"min":1709.0,"arrived":218985.3,"sold":215394.2,"auctions":2},{"date":"2026-01-13","avg":2477.53,"max":3000.0,"min":1902.0,"arrived":139585.30000000002,"sold":122144.2,"auctions":2},{"date":"2026-01-14","avg":2466.64,"max":3369.0,"min":2070.0,"arrived":195509.3,"sold":184994.59999999998,"auctions":2},{"date":"2026-01-16","avg":2477.77,"max":3358.0,"min":2182.0,"arrived":216795.0,"sold":204153.90000000002,"auctions":2},{"date":"2026-01-17","avg":2429.28,"max":2980.0,"min":2102.0,"arrived":88742.9,"sold":83961.29999999999,"auctions":2},{"date":"2026-01-19","avg":2479.01,"max":3379.0,"min":2108.0,"arrived":112578.7,"sold":108939.6,"auctions":2},{"date":"2026-01-20","avg":2498.69,"max":3310.0,"min":2060.0,"arrived":142234.40000000002,"sold":136833.4,"auctions":2},{"date":"2026-01-21","avg":2462.62,"max":2989.0,"min":2053.0,"arrived":67009.1,"sold":65958.70000000001,"auctions":2},{"date":"2026-01-22","avg":2464.81,"max":2964.0,"min":2104.0,"arrived":156914.8,"sold":153878.2,"auctions":2},{"date":"2026-01-23","avg":2545.61,"max":3222.0,"min":2245.0,"arrived":117661.2,"sold":116368.2,"auctions":2},{"date":"2026-01-24","avg":2542.43,"max":3458.0,"min":2054.0,"arrived":112947.09999999999,"sold":111624.9,"auctions":2},{"date":"2026-01-27","avg":2449.06,"max":3212.0,"min":1984.0,"arrived":172532.2,"sold":164351.7,"auctions":2},{"date":"2026-01-28","avg":2447.95,"max":3084.0,"min":2006.0,"arrived":160587.5,"sold":155412.7,"auctions":2},{"date":"2026-01-29","avg":2469.7,"max":2914.0,"min":1914.0,"arrived":113992.2,"sold":107215.6,"auctions":2},{"date":"2026-01-30","avg":2438.43,"max":2947.0,"min":2027.0,"arrived":87149.70000000001,"sold":87149.70000000001,"auctions":2},{"date":"2026-01-31","avg":2470.78,"max":3338.0,"min":2132.0,"arrived":206181.2,"sold":187853.1,"auctions":2},{"date":"2026-02-02","avg":2451.24,"max":2830.0,"min":2152.0,"arrived":168688.3,"sold":162954.3,"auctions":2},{"date":"2026-02-03","avg":2423.73,"max":2929.0,"min":1922.0,"arrived":101554.29999999999,"sold":99162.20000000001,"auctions":2},{"date":"2026-02-04","avg":2477.52,"max":3285.0,"min":1998.0,"arrived":145475.09999999998,"sold":143515.2,"auctions":2},{"date":"2026-02-05","avg":2483.92,"max":3332.0,"min":2150.0,"arrived":146280.7,"sold":145685.8,"auctions":2},{"date":"2026-02-06","avg":2488.81,"max":2905.0,"min":1902.0,"arrived":85258.9,"sold":82686.3,"auctions":2},{"date":"2026-02-07","avg":2528.39,"max":3129.0,"min":2205.0,"arrived":115315.7,"sold":115315.7,"auctions":2},{"date":"2026-02-09","avg":2512.9,"max":3244.0,"min":2096.0,"arrived":184859.6,"sold":180183.2,"auctions":2},{"date":"2026-02-10","avg":2473.55,"max":2936.0,"min":2159.0,"arrived":91015.4,"sold":88446.4,"auctions":2},{"date":"2026-02-11","avg":2451.95,"max":2946.0,"min":2130.0,"arrived":164543.40000000002,"sold":152261.5,"auctions":2},{"date":"2026-02-12","avg":2500.73,"max":3154.0,"min":1997.0,"arrived":158607.4,"sold":156688.0,"auctions":2},{"date":"2026-02-13","avg":2476.18,"max":3310.0,"min":1865.0,"arrived":88531.09999999999,"sold":85643.4,"auctions":2},{"date":"2026-02-14","avg":2448.5,"max":3249.0,"min":1902.0,"arrived":152207.0,"sold":146744.09999999998,"auctions":2},{"date":"2026-02-16","avg":2423.2,"max":3054.0,"min":2111.0,"arrived":144195.5,"sold":136686.2,"auctions":2},{"date":"2026-02-17","avg":2432.4,"max":2924.0,"min":1992.0,"arrived":87999.29999999999,"sold":81380.3,"auctions":2},{"date":"2026-02-18","avg":2419.6,"max":2899.0,"min":2123.0,"arrived":76559.5,"sold":75919.9,"auctions":2},{"date":"2026-02-19","avg":2444.36,"max":3294.0,"min":2011.0,"arrived":175521.4,"sold":168414.7,"auctions":2},{"date":"2026-02-20","avg":2446.49,"max":3100.0,"min":1936.0,"arrived":135818.5,"sold":134014.7,"auctions":2},{"date":"2026-02-21","avg":2414.53,"max":2893.0,"min":2008.0,"arrived":92153.0,"sold":87759.0,"auctions":2},{"date":"2026-02-23","avg":2457.23,"max":3252.0,"min":1802.0,"arrived":121235.4,"sold":118019.29999999999,"auctions":2},{"date":"2026-02-24","avg":2448.42,"max":3059.0,"min":1951.0,"arrived":133204.0,"sold":130192.70000000001,"auctions":2},{"date":"2026-02-25","avg":2417.52,"max":2900.0,"min":2056.0,"arrived":99753.9,"sold":93866.1,"auctions":2},{"date":"2026-02-26","avg":2404.09,"max":3300.0,"min":1996.0,"arrived":124241.5,"sold":121649.9,"auctions":2},{"date":"2026-02-27","avg":2414.85,"max":3290.0,"min":2089.0,"arrived":170772.4,"sold":163440.09999999998,"auctions":2},{"date":"2026-02-28","avg":2361.4,"max":2780.0,"min":1980.0,"arrived":83145.0,"sold":78677.6,"auctions":2},{"date":"2026-03-02","avg":2294.23,"max":2801.0,"min":1930.0,"arrived":150002.7,"sold":145739.1,"auctions":2},{"date":"2026-03-03","avg":2337.66,"max":2817.0,"min":2062.0,"arrived":142297.0,"sold":140649.3,"auctions":2},{"date":"2026-03-04","avg":2287.58,"max":2822.0,"min":1942.0,"arrived":81835.6,"sold":80694.4,"auctions":2},{"date":"2026-03-05","avg":2278.56,"max":2892.0,"min":1659.0,"arrived":152959.0,"sold":151885.90000000002,"auctions":2},{"date":"2026-03-06","avg":2313.58,"max":2798.0,"min":1835.0,"arrived":127031.4,"sold":124010.7,"auctions":2},{"date":"2026-03-07","avg":2319.48,"max":2825.0,"min":1864.0,"arrived":71374.8,"sold":68506.6,"auctions":2},{"date":"2026-03-09","avg":2359.12,"max":2699.0,"min":2083.0,"arrived":29684.5,"sold":29684.5,"auctions":1},{"date":"2026-03-10","avg":2340.98,"max":3125.0,"min":1807.0,"arrived":112621.9,"sold":110926.29999999999,"auctions":2},{"date":"2026-03-11","avg":2323.43,"max":2864.0,"min":2048.0,"arrived":101698.9,"sold":100211.70000000001,"auctions":2},{"date":"2026-03-12","avg":2292.27,"max":2811.0,"min":1756.0,"arrived":91597.6,"sold":88459.6,"auctions":2},{"date":"2026-03-13","avg":2255.85,"max":2972.0,"min":1402.0,"arrived":134254.4,"sold":131958.6,"auctions":2},{"date":"2026-03-14","avg":2235.13,"max":3301.0,"min":1644.0,"arrived":125744.7,"sold":123133.70000000001,"auctions":2},{"date":"2026-03-16","avg":2161.03,"max":2674.0,"min":1569.0,"arrived":85000.9,"sold":79371.70000000001,"auctions":2},{"date":"2026-03-17","avg":2122.85,"max":2655.0,"min":1859.0,"arrived":107798.6,"sold":106015.29999999999,"auctions":2},{"date":"2026-03-18","avg":2185.03,"max":3138.0,"min":1700.0,"arrived":129859.8,"sold":128368.70000000001,"auctions":2},{"date":"2026-03-19","avg":2176.12,"max":2848.0,"min":1816.0,"arrived":69233.29999999999,"sold":67350.5,"auctions":2},{"date":"2026-03-20","avg":2232.58,"max":2890.0,"min":1568.0,"arrived":124668.20000000001,"sold":122744.5,"auctions":2},{"date":"2026-03-23","avg":2299.97,"max":3014.0,"min":1903.0,"arrived":107629.5,"sold":106215.70000000001,"auctions":2},{"date":"2026-03-24","avg":2326.52,"max":3292.0,"min":1720.0,"arrived":81489.7,"sold":80247.9,"auctions":2},{"date":"2026-03-25","avg":2315.58,"max":3210.0,"min":1676.0,"arrived":119925.0,"sold":119337.7,"auctions":2},{"date":"2026-03-26","avg":2346.83,"max":3024.0,"min":1831.0,"arrived":103156.3,"sold":102874.1,"auctions":2},{"date":"2026-03-27","avg":2337.4,"max":2758.0,"min":1806.0,"arrived":80240.29999999999,"sold":77406.9,"auctions":2},{"date":"2026-03-28","avg":2312.19,"max":2901.0,"min":1979.0,"arrived":68854.0,"sold":67794.8,"auctions":2},{"date":"2026-03-30","avg":2355.47,"max":3263.0,"min":1816.0,"arrived":160350.8,"sold":157849.5,"auctions":2},{"date":"2026-03-31","avg":2391.57,"max":3114.0,"min":1848.0,"arrived":112576.8,"sold":110808.1,"auctions":2},{"date":"2026-04-01","avg":2357.12,"max":3103.0,"min":1910.0,"arrived":88622.4,"sold":85737.7,"auctions":2},{"date":"2026-04-02","avg":2455.71,"max":3549.0,"min":1714.0,"arrived":125694.79999999999,"sold":124786.9,"auctions":2},{"date":"2026-04-04","avg":2519.57,"max":3443.0,"min":1998.0,"arrived":112944.8,"sold":112888.8,"auctions":2},{"date":"2026-04-06","avg":2468.96,"max":3294.0,"min":1901.0,"arrived":71415.4,"sold":67948.7,"auctions":2},{"date":"2026-04-07","avg":2463.49,"max":3438.0,"min":1861.0,"arrived":111664.0,"sold":111118.1,"auctions":2},{"date":"2026-04-08","avg":2531.86,"max":3486.0,"min":1804.0,"arrived":179529.5,"sold":167479.2,"auctions":2},{"date":"2026-04-10","avg":2490.05,"max":3080.0,"min":1802.0,"arrived":76745.2,"sold":72869.2,"auctions":2},{"date":"2026-04-11","avg":2515.26,"max":3103.0,"min":1958.0,"arrived":166089.2,"sold":159070.3,"auctions":2},{"date":"2026-04-13","avg":2602.67,"max":3501.0,"min":1804.0,"arrived":183995.40000000002,"sold":162867.8,"auctions":2},{"date":"2026-04-15","avg":2665.35,"max":4000.0,"min":1989.0,"arrived":142552.8,"sold":140224.6,"auctions":2},{"date":"2026-04-16","avg":2687.42,"max":3718.0,"min":1952.0,"arrived":171043.3,"sold":168589.4,"auctions":2},{"date":"2026-04-17","avg":2728.87,"max":3401.0,"min":2133.0,"arrived":144732.4,"sold":144163.3,"auctions":2},{"date":"2026-04-18","avg":2739.53,"max":4102.0,"min":1970.0,"arrived":117519.8,"sold":108675.9,"auctions":2},{"date":"2026-04-20","avg":2774.8,"max":3400.0,"min":2035.0,"arrived":86770.29999999999,"sold":83683.7,"auctions":2},{"date":"2026-04-21","avg":2754.42,"max":3787.0,"min":2022.0,"arrived":220437.5,"sold":197801.8,"auctions":2},{"date":"2026-04-22","avg":2657.1,"max":6024.0,"min":1652.0,"arrived":185069.5,"sold":177101.5,"auctions":2},{"date":"2026-04-24","avg":2696.02,"max":3272.0,"min":2066.0,"arrived":83227.9,"sold":72897.0,"auctions":2},{"date":"2026-04-25","avg":2663.42,"max":3742.0,"min":1708.0,"arrived":167300.0,"sold":157503.2,"auctions":2},{"date":"2026-04-27","avg":2580.53,"max":6103.0,"min":1949.0,"arrived":156362.2,"sold":150347.0,"auctions":2},{"date":"2026-04-28","avg":2545.21,"max":3303.0,"min":1708.0,"arrived":74486.7,"sold":70043.6,"auctions":2},{"date":"2026-04-29","avg":2602.74,"max":3270.0,"min":1956.0,"arrived":103573.1,"sold":102217.5,"auctions":2},{"date":"2026-04-30","avg":2660.29,"max":3939.0,"min":2138.0,"arrived":129911.1,"sold":124430.2,"auctions":2},{"date":"2026-05-02","avg":2636.42,"max":3468.0,"min":2085.0,"arrived":58559.5,"sold":56111.100000000006,"auctions":2},{"date":"2026-05-04","avg":2620.88,"max":3247.0,"min":1874.0,"arrived":133302.3,"sold":131011.6,"auctions":2},{"date":"2026-05-05","avg":2640.24,"max":3410.0,"min":1922.0,"arrived":116402.3,"sold":106469.9,"auctions":2},{"date":"2026-05-06","avg":2593.48,"max":3640.0,"min":1860.0,"arrived":114894.2,"sold":111624.9,"auctions":2},{"date":"2026-05-07","avg":2461.18,"max":3728.0,"min":1862.0,"arrived":152824.2,"sold":131479.7,"auctions":2},{"date":"2026-05-08","avg":2466.45,"max":3468.0,"min":1716.0,"arrived":104571.6,"sold":99391.5,"auctions":2},{"date":"2026-05-09","avg":2529.24,"max":3389.0,"min":1929.0,"arrived":127583.40000000001,"sold":122067.7,"auctions":2},{"date":"2026-05-11","avg":2519.02,"max":3554.0,"min":1816.0,"arrived":154187.5,"sold":151373.5,"auctions":2},{"date":"2026-05-12","avg":2452.09,"max":3247.0,"min":1950.0,"arrived":71387.5,"sold":65691.1,"auctions":2},{"date":"2026-05-13","avg":2463.42,"max":3128.0,"min":1806.0,"arrived":127330.70000000001,"sold":123282.5,"auctions":2},{"date":"2026-05-14","avg":2535.4,"max":3282.0,"min":1702.0,"arrived":108778.5,"sold":106652.4,"auctions":2},{"date":"2026-05-15","avg":2497.49,"max":3459.0,"min":1790.0,"arrived":90942.5,"sold":90013.6,"auctions":2},{"date":"2026-05-16","avg":2442.95,"max":3492.0,"min":1504.0,"arrived":121718.20000000001,"sold":113879.8,"auctions":2},{"date":"2026-05-18","avg":2434.9,"max":3217.0,"min":1649.0,"arrived":99022.7,"sold":93939.4,"auctions":2},{"date":"2026-05-19","avg":2404.51,"max":3313.0,"min":1707.0,"arrived":117679.2,"sold":116586.40000000001,"auctions":2},{"date":"2026-05-20","avg":2454.3,"max":3314.0,"min":1768.0,"arrived":141626.40000000002,"sold":135202.7,"auctions":2},{"date":"2026-05-21","avg":2388.5,"max":3084.0,"min":1833.0,"arrived":59335.5,"sold":57157.0,"auctions":2},{"date":"2026-05-22","avg":2460.19,"max":3302.0,"min":1913.0,"arrived":113206.6,"sold":107382.70000000001,"auctions":2},{"date":"2026-05-23","avg":2553.92,"max":3378.0,"min":1702.0,"arrived":83304.6,"sold":82672.4,"auctions":2},{"date":"2026-05-25","avg":2571.4,"max":3452.0,"min":1863.0,"arrived":75360.0,"sold":74226.5,"auctions":2},{"date":"2026-05-26","avg":2549.01,"max":3601.0,"min":1372.0,"arrived":114796.5,"sold":113962.70000000001,"auctions":2},{"date":"2026-05-27","avg":2615.51,"max":3290.0,"min":1614.0,"arrived":72340.2,"sold":70086.4,"auctions":2},{"date":"2026-05-29","avg":2621.28,"max":3264.0,"min":1852.0,"arrived":124285.4,"sold":119060.4,"auctions":2},{"date":"2026-05-30","avg":2629.49,"max":3343.0,"min":1765.0,"arrived":181953.40000000002,"sold":163675.8,"auctions":2},{"date":"2026-06-01","avg":2584.69,"max":3200.0,"min":2022.0,"arrived":51362.0,"sold":46203.7,"auctions":1},{"date":"2026-06-02","avg":2548.74,"max":3345.0,"min":1949.0,"arrived":129253.5,"sold":123261.79999999999,"auctions":2},{"date":"2026-06-03","avg":2550.36,"max":3402.0,"min":1524.0,"arrived":125436.6,"sold":121728.09999999999,"auctions":2},{"date":"2026-06-04","avg":2518.6,"max":3511.0,"min":1631.0,"arrived":86496.5,"sold":84058.5,"auctions":2},{"date":"2026-06-05","avg":2487.23,"max":3212.0,"min":1712.0,"arrived":142918.5,"sold":134454.2,"auctions":2},{"date":"2026-06-06","avg":2511.15,"max":3342.0,"min":1479.0,"arrived":91270.29999999999,"sold":84108.1,"auctions":2},{"date":"2026-06-08","avg":2509.97,"max":3290.0,"min":1920.0,"arrived":109314.5,"sold":108684.5,"auctions":2},{"date":"2026-06-09","avg":2573.23,"max":3667.0,"min":1806.0,"arrived":128981.1,"sold":125560.1,"auctions":2},{"date":"2026-06-10","avg":2566.3,"max":3217.0,"min":1979.0,"arrived":47466.0,"sold":46248.3,"auctions":2},{"date":"2026-06-11","avg":2624.35,"max":3402.0,"min":1932.0,"arrived":107470.0,"sold":105585.79999999999,"auctions":2},{"date":"2026-06-12","avg":2678.12,"max":3440.0,"min":1802.0,"arrived":86571.6,"sold":82857.79999999999,"auctions":2},{"date":"2026-06-13","avg":2662.81,"max":3489.0,"min":1930.0,"arrived":76747.7,"sold":76051.0,"auctions":2},{"date":"2026-06-15","avg":2652.2,"max":3541.0,"min":1746.0,"arrived":132352.8,"sold":130573.8,"auctions":2},{"date":"2026-06-16","avg":2716.81,"max":3499.0,"min":2044.0,"arrived":73404.7,"sold":71909.7,"auctions":2},{"date":"2026-06-17","avg":2795.9,"max":3473.0,"min":2033.0,"arrived":120739.0,"sold":119896.4,"auctions":2},{"date":"2026-06-18","avg":2808.16,"max":4021.0,"min":2086.0,"arrived":114757.6,"sold":111491.2,"auctions":2},{"date":"2026-06-19","avg":2762.61,"max":3466.0,"min":2093.0,"arrived":39549.4,"sold":38645.3,"auctions":1},{"date":"2026-06-20","avg":2847.93,"max":3556.0,"min":1744.0,"arrived":117796.6,"sold":114963.2,"auctions":2},{"date":"2026-06-22","avg":2946.58,"max":4207.0,"min":2219.0,"arrived":97398.0,"sold":93338.7,"auctions":2},{"date":"2026-06-23","avg":2904.61,"max":3819.0,"min":2052.0,"arrived":70158.5,"sold":66540.9,"auctions":2},{"date":"2026-06-24","avg":2798.01,"max":3933.0,"min":1908.0,"arrived":125420.0,"sold":122294.1,"auctions":2},{"date":"2026-06-25","avg":2789.61,"max":3587.0,"min":1856.0,"arrived":76172.4,"sold":69505.1,"auctions":2},{"date":"2026-06-27","avg":2874.52,"max":3673.0,"min":1796.0,"arrived":128727.5,"sold":126890.3,"auctions":2},{"date":"2026-06-29","avg":2907.03,"max":4022.0,"min":1872.0,"arrived":124927.29999999999,"sold":118231.4,"auctions":2},{"date":"2026-06-30","avg":2852.98,"max":3673.0,"min":2101.0,"arrived":48219.2,"sold":46301.7,"auctions":2},{"date":"2026-07-01","avg":2849.05,"max":3650.0,"min":1959.0,"arrived":123440.4,"sold":115799.1,"auctions":2},{"date":"2026-07-02","avg":2986.08,"max":3895.0,"min":1855.0,"arrived":103037.9,"sold":101797.8,"auctions":2},{"date":"2026-07-03","avg":2871.38,"max":3804.0,"min":1830.0,"arrived":75741.09999999999,"sold":74083.90000000001,"auctions":2},{"date":"2026-07-04","avg":2764.73,"max":3814.0,"min":1898.0,"arrived":148302.0,"sold":140830.9,"auctions":2},{"date":"2026-07-06","avg":2858.58,"max":3725.0,"min":2150.0,"arrived":76571.0,"sold":73079.29999999999,"auctions":2},{"date":"2026-07-07","avg":2831.25,"max":3751.0,"min":2102.0,"arrived":130471.70000000001,"sold":123534.1,"auctions":2},{"date":"2026-07-08","avg":2818.32,"max":4610.0,"min":1802.0,"arrived":122464.7,"sold":116609.6,"auctions":2},{"date":"2026-07-09","avg":2726.0,"max":3718.0,"min":2110.0,"arrived":32590.8,"sold":30156.1,"auctions":1},{"date":"2026-07-10","avg":2751.66,"max":3698.0,"min":1702.0,"arrived":110472.0,"sold":104574.2,"auctions":2},{"date":"2026-07-11","avg":2785.83,"max":3810.0,"min":1962.0,"arrived":94781.5,"sold":90276.0,"auctions":2},{"date":"2026-07-13","avg":2768.99,"max":3785.0,"min":1806.0,"arrived":57470.5,"sold":56073.6,"auctions":2},{"date":"2026-07-14","avg":2790.03,"max":3980.0,"min":1862.0,"arrived":117356.79999999999,"sold":115757.5,"auctions":2},{"date":"2026-07-15","avg":2841.36,"max":3774.0,"min":1999.0,"arrived":70412.5,"sold":67272.2,"auctions":2},{"date":"2026-07-16","avg":2878.47,"max":3795.0,"min":1952.0,"arrived":117605.2,"sold":117133.2,"auctions":2},{"date":"2026-07-17","avg":3034.8,"max":4567.0,"min":1717.0,"arrived":90971.3,"sold":89739.1,"auctions":2},{"date":"2026-07-18","avg":3016.17,"max":4009.0,"min":2156.0,"arrived":45600.399999999994,"sold":45399.100000000006,"auctions":2},{"date":"2026-07-20","avg":3126.2,"max":4137.0,"min":1917.0,"arrived":115435.0,"sold":113354.6,"auctions":2},{"date":"2026-07-21","avg":3301.27,"max":4883.0,"min":2399.0,"arrived":112965.1,"sold":103316.5,"auctions":2},{"date":"2026-07-22","avg":3319.57,"max":4456.0,"min":2008.0,"arrived":67210.7,"sold":66521.2,"auctions":2},{"date":"2026-07-23","avg":3199.04,"max":4680.0,"min":2058.0,"arrived":140670.2,"sold":137289.1,"auctions":2},{"date":"2026-07-24","avg":3137.41,"max":4520.0,"min":1709.0,"arrived":94946.0,"sold":90582.7,"auctions":2},{"date":"2026-07-25","avg":3182.22,"max":4503.0,"min":2184.0,"arrived":142637.8,"sold":138924.7,"auctions":2},{"date":"2026-07-27","avg":3227.81,"max":5028.0,"min":2139.0,"arrived":145194.40000000002,"sold":130545.2,"auctions":2},{"date":"2026-07-28","avg":3160.43,"max":4514.0,"min":1949.0,"arrived":52729.6,"sold":47510.1,"auctions":2},{"date":"2026-07-29","avg":3161.04,"max":4260.0,"min":2033.0,"arrived":132207.6,"sold":126875.3,"auctions":2},{"date":"2026-07-30","avg":3205.55,"max":7070.0,"min":1504.0,"arrived":123317.70000000001,"sold":107541.1,"auctions":2},{"date":"2026-07-31","avg":3097.02,"max":5000.0,"min":2002.0,"arrived":84224.9,"sold":74066.2,"auctions":2},{"date":"2026-08-01","avg":3100.68,"max":4573.0,"min":2006.0,"arrived":134556.5,"sold":124969.0,"auctions":2},{"date":"2026-08-03","avg":3073.15,"max":4262.0,"min":2020.0,"arrived":77661.2,"sold":71558.0,"auctions":2},{"date":"2026-08-04","avg":3001.23,"max":4504.0,"min":2077.0,"arrived":141946.5,"sold":134338.5,"auctions":2},{"date":"2026-08-05","avg":3059.15,"max":5087.0,"min":1902.0,"arrived":115844.9,"sold":102881.3,"auctions":2},{"date":"2026-08-06","avg":2938.3,"max":4104.0,"min":1874.0,"arrived":60458.5,"sold":55244.3,"auctions":2},{"date":"2026-08-07","avg":3030.99,"max":5017.0,"min":2104.0,"arrived":107926.6,"sold":100887.6,"auctions":2},{"date":"2026-08-08","avg":3069.68,"max":4434.0,"min":2177.0,"arrived":76372.9,"sold":72160.3,"auctions":2},{"date":"2026-08-10","avg":3144.99,"max":4803.0,"min":1351.0,"arrived":66424.2,"sold":62783.5,"auctions":2},{"date":"2026-08-11","avg":3104.56,"max":4775.0,"min":2002.0,"arrived":130797.8,"sold":128889.4,"auctions":2},{"date":"2026-08-12","avg":3112.85,"max":4199.0,"min":1991.0,"arrived":85074.4,"sold":80339.4,"auctions":2},{"date":"2026-08-13","avg":3081.4,"max":4236.0,"min":2192.0,"arrived":138806.1,"sold":134639.40000000002,"auctions":2},{"date":"2026-08-14","avg":3189.23,"max":5101.0,"min":2236.0,"arrived":124807.9,"sold":113710.4,"auctions":2},{"date":"2026-08-17","avg":3129.37,"max":4252.0,"min":2178.0,"arrived":62700.899999999994,"sold":59356.5,"auctions":2},{"date":"2026-08-18","avg":3098.68,"max":4042.0,"min":2201.0,"arrived":138947.09999999998,"sold":131936.3,"auctions":2},{"date":"2026-08-19","avg":3136.26,"max":4047.0,"min":2054.0,"arrived":121342.5,"sold":111136.5,"auctions":2},{"date":"2026-08-20","avg":3118.01,"max":4240.0,"min":1891.0,"arrived":104478.4,"sold":97004.8,"auctions":2},{"date":"2026-08-21","avg":3100.95,"max":4295.0,"min":2312.0,"arrived":150262.6,"sold":144226.7,"auctions":2},{"date":"2026-08-22","avg":3010.01,"max":3957.0,"min":1790.0,"arrived":96349.0,"sold":88957.4,"auctions":2},{"date":"2026-08-24","avg":2968.58,"max":3889.0,"min":1819.0,"arrived":150179.7,"sold":149266.0,"auctions":2},{"date":"2026-08-25","avg":3033.14,"max":4095.0,"min":2058.0,"arrived":146531.5,"sold":140936.9,"auctions":2},{"date":"2026-08-27","avg":2990.06,"max":3754.0,"min":2084.0,"arrived":60285.1,"sold":55167.0,"auctions":2},{"date":"2026-08-28","avg":2944.64,"max":3782.0,"min":2004.0,"arrived":106733.2,"sold":99175.0,"auctions":2},{"date":"2026-08-29","avg":3067.67,"max":4159.0,"min":2310.0,"arrived":71986.7,"sold":70783.2,"auctions":2},{"date":"2026-08-31","avg":3057.88,"max":3931.0,"min":2070.0,"arrived":74901.3,"sold":71943.4,"auctions":2},{"date":"2026-09-01","avg":3023.96,"max":4014.0,"min":2204.0,"arrived":139468.4,"sold":135919.0,"auctions":2},{"date":"2026-09-02","avg":3036.4,"max":3888.0,"min":2012.0,"arrived":78955.4,"sold":75891.0,"auctions":2},{"date":"2026-09-03","avg":3013.74,"max":3816.0,"min":2116.0,"arrived":131639.8,"sold":129048.20000000001,"auctions":2},{"date":"2026-09-04","avg":3078.65,"max":3837.0,"min":2354.0,"arrived":165849.40000000002,"sold":161540.1,"auctions":2},{"date":"2026-09-07","avg":2949.61,"max":3506.0,"min":1902.0,"arrived":138443.8,"sold":133091.8,"auctions":2},{"date":"2026-09-08","avg":3018.56,"max":3629.0,"min":2102.0,"arrived":73431.4,"sold":69414.1,"auctions":2},{"date":"2026-09-09","avg":3077.75,"max":3822.0,"min":2349.0,"arrived":128515.20000000001,"sold":124520.3,"auctions":2},{"date":"2026-09-10","avg":3068.28,"max":3792.0,"min":2028.0,"arrived":99775.40000000001,"sold":94582.9,"auctions":2},{"date":"2026-09-11","avg":3050.4,"max":3997.0,"min":2304.0,"arrived":157484.5,"sold":154438.5,"auctions":2},{"date":"2026-09-12","avg":3099.55,"max":3779.0,"min":2062.0,"arrived":106951.5,"sold":104170.0,"auctions":2},{"date":"2026-09-14","avg":3143.12,"max":3621.0,"min":2316.0,"arrived":150850.1,"sold":147783.4,"auctions":2},{"date":"2026-09-15","avg":3161.14,"max":4520.0,"min":2445.0,"arrived":190922.7,"sold":186374.2,"auctions":2},{"date":"2026-09-16","avg":3050.19,"max":3574.0,"min":2330.0,"arrived":23625.0,"sold":22770.0,"auctions":1},{"date":"2026-09-17","avg":3105.71,"max":3611.0,"min":2002.0,"arrived":163524.4,"sold":156697.9,"auctions":2},{"date":"2026-09-18","avg":3239.87,"max":4104.0,"min":2269.0,"arrived":153710.4,"sold":149777.6,"auctions":2},{"date":"2026-09-19","avg":3267.92,"max":4104.0,"min":2167.0,"arrived":148869.6,"sold":147570.9,"auctions":2},{"date":"2026-09-21","avg":3213.21,"max":4114.0,"min":2087.0,"arrived":192614.4,"sold":186498.5,"auctions":2},{"date":"2026-09-22","avg":3192.9,"max":3960.0,"min":2235.0,"arrived":130099.6,"sold":129898.0,"auctions":2},{"date":"2026-09-23","avg":3183.44,"max":3868.0,"min":2294.0,"arrived":186141.7,"sold":180926.9,"auctions":2},{"date":"2026-09-24","avg":3193.05,"max":4354.0,"min":2576.0,"arrived":252766.3,"sold":237085.09999999998,"auctions":2},{"date":"2026-09-25","avg":3127.48,"max":3702.0,"min":2248.0,"arrived":109011.7,"sold":102209.9,"auctions":2},{"date":"2026-09-26","avg":3109.14,"max":3700.0,"min":2424.0,"arrived":202053.2,"sold":196872.7,"auctions":2},{"date":"2026-09-28","avg":3206.31,"max":4204.0,"min":2338.0,"arrived":190236.2,"sold":180260.4,"auctions":2},{"date":"2026-09-29","avg":3243.8,"max":4070.0,"min":2302.0,"arrived":137398.0,"sold":128415.6,"auctions":2},{"date":"2026-09-30","avg":3176.26,"max":4013.0,"min":2050.0,"arrived":208889.7,"sold":202693.7,"auctions":2},{"date":"2026-10-01","avg":3177.74,"max":3897.0,"min":2299.0,"arrived":143311.3,"sold":139544.8,"auctions":2},{"date":"2026-10-03","avg":3188.28,"max":3793.0,"min":2510.0,"arrived":198037.2,"sold":195021.40000000002,"auctions":2},{"date":"2026-10-05","avg":3226.37,"max":4374.0,"min":2634.0,"arrived":262689.1,"sold":237190.9,"auctions":2},{"date":"2026-10-06","avg":3174.56,"max":3836.0,"min":2464.0,"arrived":138739.7,"sold":134180.4,"auctions":2},{"date":"2026-10-07","avg":3178.66,"max":3780.0,"min":2415.0,"arrived":205422.9,"sold":193591.0,"auctions":2},{"date":"2026-10-08","avg":3246.09,"max":4020.0,"min":2502.0,"arrived":234964.5,"sold":226110.8,"auctions":2},{"date":"2026-10-09","avg":3238.62,"max":4393.0,"min":2509.0,"arrived":171809.09999999998,"sold":165206.5,"auctions":2},{"date":"2026-10-10","avg":3206.57,"max":4218.0,"min":2056.0,"arrived":237437.3,"sold":229027.6,"auctions":2},{"date":"2026-10-12","avg":3147.55,"max":3736.0,"min":2360.0,"arrived":161869.40000000002,"sold":149483.7,"auctions":2},{"date":"2026-10-13","avg":3136.45,"max":3850.0,"min":2424.0,"arrived":236265.4,"sold":222073.8,"auctions":2},{"date":"2026-10-14","avg":3114.69,"max":4326.0,"min":2406.0,"arrived":275679.6,"sold":249639.7,"auctions":2},{"date":"2026-10-15","avg":3031.09,"max":3529.0,"min":2508.0,"arrived":130593.4,"sold":121063.6,"auctions":2},{"date":"2026-10-16","avg":3059.24,"max":3658.0,"min":2021.0,"arrived":207513.0,"sold":197092.7,"auctions":2},{"date":"2026-10-17","avg":3054.34,"max":3831.0,"min":2522.0,"arrived":185245.3,"sold":173532.4,"auctions":2},{"date":"2026-10-19","avg":3113.45,"max":4339.0,"min":2380.0,"arrived":107811.79999999999,"sold":104135.4,"auctions":2},{"date":"2026-10-21","avg":3124.21,"max":4362.0,"min":2272.0,"arrived":190912.7,"sold":187344.1,"auctions":2},{"date":"2026-10-22","avg":3089.55,"max":3756.0,"min":2292.0,"arrived":131458.7,"sold":129294.4,"auctions":2},{"date":"2026-10-23","avg":3082.68,"max":3912.0,"min":2414.0,"arrived":161627.8,"sold":154208.0,"auctions":2},{"date":"2026-10-24","avg":3034.36,"max":3537.0,"min":2460.0,"arrived":88300.9,"sold":81191.2,"auctions":1},{"date":"2026-10-26","avg":2977.34,"max":3599.0,"min":2502.0,"arrived":96316.1,"sold":87381.0,"auctions":2},{"date":"2026-10-27","avg":2978.7,"max":3580.0,"min":2404.0,"arrived":175285.9,"sold":168741.6,"auctions":2},{"date":"2026-10-28","avg":2999.81,"max":3709.0,"min":2202.0,"arrived":147149.7,"sold":144409.6,"auctions":2},{"date":"2026-10-29","avg":3051.11,"max":3982.0,"min":2420.0,"arrived":147392.9,"sold":143682.4,"auctions":2},{"date":"2026-10-30","avg":2998.98,"max":3956.0,"min":2382.0,"arrived":159010.8,"sold":150979.3,"auctions":2},{"date":"2026-10-31","avg":3009.9,"max":3703.0,"min":2312.0,"arrived":137824.90000000002,"sold":134227.6,"auctions":2},{"date":"2026-11-02","avg":3063.19,"max":3624.0,"min":2407.0,"arrived":123430.7,"sold":121129.79999999999,"auctions":2},{"date":"2026-11-03","avg":3060.9,"max":4001.0,"min":2538.0,"arrived":156426.5,"sold":153679.3,"auctions":2},{"date":"2026-11-04","avg":3004.31,"max":3558.0,"min":2435.0,"arrived":83129.2,"sold":75159.9,"auctions":2},{"date":"2026-11-05","avg":3027.72,"max":3604.0,"min":2342.0,"arrived":160589.9,"sold":155950.1,"auctions":2},{"date":"2026-11-06","avg":3141.97,"max":3725.0,"min":2454.0,"arrived":82297.5,"sold":81976.70000000001,"auctions":2},{"date":"2026-11-07","avg":3197.76,"max":4003.0,"min":2616.0,"arrived":57247.9,"sold":56755.2,"auctions":1}],"pepper":[{"date":"2025-11-07","garbled":700.0,"ungarbled":680.0},{"date":"2025-11-08","garbled":700.0,"ungarbled":680.0},{"date":"2025-11-10","garbled":700.0,"ungarbled":680.0},{"date":"2025-11-11","garbled":700.0,"ungarbled":680.0},{"date":"2025-11-12","garbled":702.0,"ungarbled":682.0},{"date":"2025-11-13","garbled":703.0,"ungarbled":683.0},{"date":"2025-11-14","garbled":704.0,"ungarbled":684.0},{"date":"2025-11-15","garbled":705.0,"ungarbled":685.0},{"date":"2025-11-17","garbled":707.0,"ungarbled":687.0},{"date":"2025-11-18","garbled":708.0,"ungarbled":688.0},{"date":"2025-11-19","garbled":709.0,"ungarbled":689.0},{"date":"2025-11-20","garbled":710.0,"ungarbled":690.0},{"date":"2025-11-21","garbled":711.0,"ungarbled":691.0},{"date":"2025-11-22","garbled":712.0,"ungarbled":692.0},{"date":"2025-11-24","garbled":713.0,"ungarbled":693.0},{"date":"2025-11-25","garbled":714.0,"ungarbled":694.0},{"date":"2025-11-26","garbled":714.0,"ungarbled":694.0},{"date":"2025-11-28","garbled":713.0,"ungarbled":693.0},{"date":"2025-11-29","garbled":713.0,"ungarbled":693.0},{"date":"2025-12-01","garbled":713.0,"ungarbled":693.0},{"date":"2025-12-02","garbled":712.0,"ungarbled":692.0},{"date":"2025-12-03","garbled":712.0,"ungarbled":692.0},{"date":"2025-12-04","garbled":712.0,"ungarbled":692.0},{"date":"2025-12-05","garbled":712.0,"ungarbled":692.0},{"date":"2025-12-06","garbled":712.0,"ungarbled":692.0},{"date":"2025-12-12","garbled":710.0,"ungarbled":690.0},{"date":"2025-12-13","garbled":710.0,"ungarbled":690.0},{"date":"2025-12-15","garbled":710.0,"ungarbled":690.0},{"date":"2025-12-16","garbled":710.0,"ungarbled":690.0},{"date":"2025-12-17","garbled":711.0,"ungarbled":691.0},{"date":"2025-12-18","garbled":711.0,"ungarbled":691.0},{"date":"2025-12-20","garbled":714.0,"ungarbled":694.0},{"date":"2025-12-22","garbled":716.0,"ungarbled":696.0},{"date":"2025-12-23","garbled":717.0,"ungarbled":null},{"date":"2025-12-24","garbled":718.0,"ungarbled":698.0},{"date":"2025-12-27","garbled":719.0,"ungarbled":699.0},{"date":"2025-12-29","garbled":720.0,"ungarbled":700.0},{"date":"2025-12-30","garbled":720.0,"ungarbled":700.0},{"date":"2025-12-31","garbled":720.0,"ungarbled":700.0},{"date":"2026-01-01","garbled":720.0,"ungarbled":700.0},{"date":"2026-01-02","garbled":720.0,"ungarbled":700.0},{"date":"2026-01-03","garbled":719.0,"ungarbled":699.0},{"date":"2026-01-05","garbled":717.0,"ungarbled":697.0},{"date":"2026-01-06","garbled":715.0,"ungarbled":695.0},{"date":"2026-01-07","garbled":713.0,"ungarbled":693.0},{"date":"2026-01-08","garbled":712.0,"ungarbled":692.0},{"date":"2026-01-09","garbled":712.0,"ungarbled":692.0},{"date":"2026-01-10","garbled":712.0,"ungarbled":692.0},{"date":"2026-01-12","garbled":712.0,"ungarbled":692.0},{"date":"2026-01-13","garbled":712.0,"ungarbled":692.0},{"date":"2026-01-14","garbled":713.0,"ungarbled":693.0},{"date":"2026-01-15","garbled":715.0,"ungarbled":695.0},{"date":"2026-01-16","garbled":716.0,"ungarbled":696.0},{"date":"2026-01-17","garbled":717.0,"ungarbled":697.0},{"date":"2026-01-20","garbled":718.0,"ungarbled":698.0},{"date":"2026-01-21","garbled":718.0,"ungarbled":698.0},{"date":"2026-01-22","garbled":718.0,"ungarbled":698.0},{"date":"2026-01-23","garbled":718.0,"ungarbled":698.0},{"date":"2026-01-24","garbled":717.0,"ungarbled":697.0},{"date":"2026-01-27","garbled":716.0,"ungarbled":696.0},{"date":"2026-01-29","garbled":714.0,"ungarbled":694.0},{"date":"2026-01-30","garbled":713.0,"ungarbled":693.0},{"date":"2026-02-02","garbled":713.0,"ungarbled":693.0},{"date":"2026-02-04","garbled":716.0,"ungarbled":696.0},{"date":"2026-02-05","garbled":718.0,"ungarbled":698.0},{"date":"2026-02-06","garbled":720.0,"ungarbled":700.0},{"date":"2026-02-07","garbled":722.0,"ungarbled":702.0},{"date":"2026-02-09","garbled":724.0,"ungarbled":704.0},{"date":"2026-02-10","garbled":726.0,"ungarbled":706.0},{"date":"2026-02-11","garbled":728.0,"ungarbled":708.0},{"date":"2026-02-12","garbled":729.0,"ungarbled":709.0},{"date":"2026-02-14","garbled":728.0,"ungarbled":708.0},{"date":"2026-02-16","garbled":726.0,"ungarbled":706.0},{"date":"2026-02-17","garbled":724.0,"ungarbled":704.0},{"date":"2026-02-18","garbled":722.0,"ungarbled":702.0},{"date":"2026-02-19","garbled":720.0,"ungarbled":700.0},{"date":"2026-02-20","garbled":719.0,"ungarbled":699.0},{"date":"2026-02-21","garbled":719.0,"ungarbled":699.0},{"date":"2026-02-23","garbled":719.0,"ungarbled":699.0},{"date":"2026-02-24","garbled":719.0,"ungarbled":699.0},{"date":"2026-02-25","garbled":720.0,"ungarbled":700.0},{"date":"2026-02-26","garbled":720.0,"ungarbled":700.0},{"date":"2026-02-27","garbled":720.0,"ungarbled":700.0},{"date":"2026-02-28","garbled":720.0,"ungarbled":700.0},{"date":"2026-03-02","garbled":718.0,"ungarbled":698.0},{"date":"2026-03-03","garbled":716.0,"ungarbled":696.0},{"date":"2026-03-04","garbled":715.0,"ungarbled":695.0},{"date":"2026-03-05","garbled":714.0,"ungarbled":694.0},{"date":"2026-03-06","garbled":714.0,"ungarbled":694.0},{"date":"2026-03-07","garbled":714.0,"ungarbled":694.0},{"date":"2026-03-09","garbled":714.0,"ungarbled":694.0},{"date":"2026-03-10","garbled":715.0,"ungarbled":695.0},{"date":"2026-03-11","garbled":716.0,"ungarbled":696.0},{"date":"2026-03-12","garbled":717.0,"ungarbled":697.0},{"date":"2026-03-13","garbled":718.0,"ungarbled":698.0},{"date":"2026-03-14","garbled":719.0,"ungarbled":699.0},{"date":"2026-03-16","garbled":719.0,"ungarbled":699.0},{"date":"2026-03-17","garbled":719.0,"ungarbled":699.0},{"date":"2026-03-18","garbled":718.0,"ungarbled":698.0},{"date":"2026-03-19","garbled":717.0,"ungarbled":697.0},{"date":"2026-03-21","garbled":715.0,"ungarbled":695.0},{"date":"2026-03-23","garbled":712.0,"ungarbled":692.0},{"date":"2026-03-24","garbled":710.0,"ungarbled":690.0},{"date":"2026-03-25","garbled":709.0,"ungarbled":689.0},{"date":"2026-03-26","garbled":709.0,"ungarbled":689.0},{"date":"2026-03-27","garbled":708.0,"ungarbled":688.0},{"date":"2026-03-28","garbled":707.0,"ungarbled":687.0},{"date":"2026-03-30","garbled":707.0,"ungarbled":687.0},{"date":"2026-03-31","garbled":707.0,"ungarbled":687.0},{"date":"2026-04-01","garbled":707.0,"ungarbled":687.0},{"date":"2026-04-02","garbled":707.0,"ungarbled":687.0},{"date":"2026-04-04","garbled":708.0,"ungarbled":688.0},{"date":"2026-04-06","garbled":709.0,"ungarbled":689.0},{"date":"2026-04-07","garbled":711.0,"ungarbled":691.0},{"date":"2026-04-08","garbled":714.0,"ungarbled":694.0},{"date":"2026-04-11","garbled":726.0,"ungarbled":706.0},{"date":"2026-04-13","garbled":728.0,"ungarbled":708.0},{"date":"2026-04-14","garbled":727.0,"ungarbled":707.0},{"date":"2026-04-16","garbled":724.0,"ungarbled":704.0},{"date":"2026-04-17","garbled":721.0,"ungarbled":701.0},{"date":"2026-04-18","garbled":719.0,"ungarbled":699.0},{"date":"2026-04-20","garbled":718.0,"ungarbled":698.0},{"date":"2026-04-21","garbled":718.0,"ungarbled":698.0},{"date":"2026-04-22","garbled":719.0,"ungarbled":699.0},{"date":"2026-04-23","garbled":721.0,"ungarbled":701.0},{"date":"2026-04-24","garbled":723.0,"ungarbled":703.0},{"date":"2026-04-25","garbled":725.0,"ungarbled":705.0},{"date":"2026-04-27","garbled":727.0,"ungarbled":707.0},{"date":"2026-04-28","garbled":727.0,"ungarbled":707.0},{"date":"2026-04-29","garbled":726.0,"ungarbled":706.0},{"date":"2026-04-30","garbled":724.0,"ungarbled":704.0},{"date":"2026-05-02","garbled":722.0,"ungarbled":702.0},{"date":"2026-05-04","garbled":720.0,"ungarbled":700.0},{"date":"2026-05-05","garbled":718.0,"ungarbled":698.0},{"date":"2026-05-06","garbled":718.0,"ungarbled":698.0},{"date":"2026-05-07","garbled":718.0,"ungarbled":698.0},{"date":"2026-05-08","garbled":719.0,"ungarbled":699.0},{"date":"2026-05-09","garbled":720.0,"ungarbled":700.0},{"date":"2026-05-11","garbled":721.0,"ungarbled":701.0},{"date":"2026-05-12","garbled":723.0,"ungarbled":703.0},{"date":"2026-05-13","garbled":725.0,"ungarbled":705.0},{"date":"2026-05-14","garbled":728.0,"ungarbled":708.0},{"date":"2026-05-15","garbled":728.0,"ungarbled":708.0},{"date":"2026-05-16","garbled":727.0,"ungarbled":707.0},{"date":"2026-05-18","garbled":726.0,"ungarbled":706.0},{"date":"2026-05-19","garbled":725.0,"ungarbled":705.0},{"date":"2026-05-21","garbled":723.0,"ungarbled":703.0},{"date":"2026-05-22","garbled":722.0,"ungarbled":702.0},{"date":"2026-05-23","garbled":722.0,"ungarbled":702.0},{"date":"2026-05-25","garbled":722.0,"ungarbled":702.0},{"date":"2026-05-26","garbled":723.0,"ungarbled":703.0},{"date":"2026-05-29","garbled":724.0,"ungarbled":704.0},{"date":"2026-05-30","garbled":724.0,"ungarbled":704.0},{"date":"2026-06-01","garbled":724.0,"ungarbled":704.0},{"date":"2026-06-02","garbled":723.0,"ungarbled":703.0},{"date":"2026-06-03","garbled":721.0,"ungarbled":701.0},{"date":"2026-06-04","garbled":719.0,"ungarbled":699.0},{"date":"2026-06-05","garbled":716.0,"ungarbled":696.0},{"date":"2026-06-06","garbled":715.0,"ungarbled":695.0},{"date":"2026-06-08","garbled":715.0,"ungarbled":695.0},{"date":"2026-06-09","garbled":715.0,"ungarbled":695.0},{"date":"2026-06-10","garbled":716.0,"ungarbled":696.0},{"date":"2026-06-11","garbled":717.0,"ungarbled":697.0},{"date":"2026-06-13","garbled":716.0,"ungarbled":696.0},{"date":"2026-06-15","garbled":714.0,"ungarbled":694.0},{"date":"2026-06-16","garbled":712.0,"ungarbled":692.0},{"date":"2026-06-17","garbled":711.0,"ungarbled":691.0},{"date":"2026-06-18","garbled":711.0,"ungarbled":691.0},{"date":"2026-06-19","garbled":711.0,"ungarbled":691.0},{"date":"2026-06-20","garbled":712.0,"ungarbled":692.0},{"date":"2026-06-22","garbled":713.0,"ungarbled":693.0},{"date":"2026-06-23","garbled":714.0,"ungarbled":694.0},{"date":"2026-06-24","garbled":715.0,"ungarbled":695.0},{"date":"2026-06-25","garbled":718.0,"ungarbled":698.0},{"date":"2026-06-26","garbled":721.0,"ungarbled":701.0},{"date":"2026-06-27","garbled":724.0,"ungarbled":704.0},{"date":"2026-06-29","garbled":725.0,"ungarbled":705.0},{"date":"2026-06-30","garbled":723.0,"ungarbled":703.0},{"date":"2026-07-01","garbled":721.0,"ungarbled":701.0},{"date":"2026-07-02","garbled":719.0,"ungarbled":699.0},{"date":"2026-07-03","garbled":718.0,"ungarbled":698.0},{"date":"2026-07-04","garbled":717.0,"ungarbled":697.0},{"date":"2026-07-07","garbled":716.0,"ungarbled":696.0},{"date":"2026-07-08","garbled":716.0,"ungarbled":696.0},{"date":"2026-07-09","garbled":716.0,"ungarbled":696.0},{"date":"2026-07-10","garbled":716.0,"ungarbled":696.0},{"date":"2026-07-11","garbled":716.0,"ungarbled":696.0},{"date":"2026-07-13","garbled":716.0,"ungarbled":696.0},{"date":"2026-07-14","garbled":717.0,"ungarbled":697.0},{"date":"2026-07-15","garbled":718.0,"ungarbled":698.0},{"date":"2026-07-16","garbled":719.0,"ungarbled":699.0},{"date":"2026-07-17","garbled":720.0,"ungarbled":700.0},{"date":"2026-07-18","garbled":720.0,"ungarbled":700.0},{"date":"2026-07-20","garbled":720.0,"ungarbled":700.0},{"date":"2026-07-21","garbled":719.0,"ungarbled":699.0},{"date":"2026-07-22","garbled":718.0,"ungarbled":698.0},{"date":"2026-07-24","garbled":716.0,"ungarbled":696.0},{"date":"2026-07-25","garbled":716.0,"ungarbled":696.0},{"date":"2026-07-27","garbled":716.0,"ungarbled":696.0},{"date":"2026-07-28","garbled":716.0,"ungarbled":696.0},{"date":"2026-07-29","garbled":715.0,"ungarbled":695.0},{"date":"2026-07-30","garbled":715.0,"ungarbled":695.0},{"date":"2026-08-01","garbled":715.0,"ungarbled":695.0},{"date":"2026-08-03","garbled":715.0,"ungarbled":695.0},{"date":"2026-08-04","garbled":715.0,"ungarbled":695.0},{"date":"2026-08-05","garbled":715.0,"ungarbled":695.0},{"date":"2026-08-06","garbled":715.0,"ungarbled":695.0},{"date":"2026-08-08","garbled":714.0,"ungarbled":694.0},{"date":"2026-08-10","garbled":712.0,"ungarbled":692.0},{"date":"2026-08-11","garbled":710.0,"ungarbled":690.0},{"date":"2026-08-12","garbled":708.0,"ungarbled":688.0},{"date":"2026-08-13","garbled":708.0,"ungarbled":688.0},{"date":"2026-08-14","garbled":708.0,"ungarbled":688.0},{"date":"2026-08-17","garbled":708.0,"ungarbled":688.0},{"date":"2026-08-24","garbled":717.0,"ungarbled":697.0},{"date":"2026-08-25","garbled":718.0,"ungarbled":698.0},{"date":"2026-08-27","garbled":719.0,"ungarbled":699.0},{"date":"2026-08-28","garbled":720.0,"ungarbled":700.0},{"date":"2026-08-29","garbled":720.0,"ungarbled":700.0},{"date":"2026-08-31","garbled":720.0,"ungarbled":700.0},{"date":"2026-09-01","garbled":720.0,"ungarbled":700.0},{"date":"2026-09-02","garbled":721.0,"ungarbled":701.0},{"date":"2026-09-03","garbled":722.0,"ungarbled":702.0},{"date":"2026-09-05","garbled":723.0,"ungarbled":703.0},{"date":"2026-09-07","garbled":724.0,"ungarbled":704.0},{"date":"2026-09-08","garbled":724.0,"ungarbled":704.0},{"date":"2026-09-09","garbled":724.0,"ungarbled":704.0},{"date":"2026-09-10","garbled":724.0,"ungarbled":704.0},{"date":"2026-09-11","garbled":724.0,"ungarbled":704.0},{"date":"2026-09-12","garbled":724.0,"ungarbled":704.0},{"date":"2026-09-14","garbled":724.0,"ungarbled":704.0},{"date":"2026-09-15","garbled":724.0,"ungarbled":704.0},{"date":"2026-09-16","garbled":724.0,"ungarbled":704.0},{"date":"2026-09-17","garbled":723.0,"ungarbled":703.0},{"date":"2026-09-18","garbled":722.0,"ungarbled":702.0},{"date":"2026-09-19","garbled":721.0,"ungarbled":701.0},{"date":"2026-09-21","garbled":720.0,"ungarbled":700.0},{"date":"2026-09-22","garbled":719.0,"ungarbled":699.0},{"date":"2026-09-24","garbled":719.0,"ungarbled":699.0},{"date":"2026-09-25","garbled":719.0,"ungarbled":699.0},{"date":"2026-09-26","garbled":719.0,"ungarbled":699.0},{"date":"2026-09-28","garbled":719.0,"ungarbled":699.0},{"date":"2026-10-03","garbled":722.0,"ungarbled":702.0},{"date":"2026-10-05","garbled":723.0,"ungarbled":703.0},{"date":"2026-10-06","garbled":724.0,"ungarbled":null},{"date":"2026-10-07","garbled":724.0,"ungarbled":704.0},{"date":"2026-10-08","garbled":725.0,"ungarbled":705.0},{"date":"2026-10-09","garbled":726.0,"ungarbled":706.0},{"date":"2026-10-10","garbled":727.0,"ungarbled":707.0},{"date":"2026-10-12","garbled":729.0,"ungarbled":709.0},{"date":"2026-10-13","garbled":730.0,"ungarbled":710.0},{"date":"2026-10-14","garbled":731.0,"ungarbled":711.0},{"date":"2026-10-15","garbled":732.0,"ungarbled":712.0},{"date":"2026-10-16","garbled":734.0,"ungarbled":714.0},{"date":"2026-10-17","garbled":735.0,"ungarbled":715.0},{"date":"2026-10-19","garbled":737.0,"ungarbled":717.0},{"date":"2026-10-21","garbled":740.0,"ungarbled":720.0},{"date":"2026-10-22","garbled":743.0,"ungarbled":723.0},{"date":"2026-10-23","garbled":746.0,"ungarbled":726.0},{"date":"2026-10-26","garbled":753.0,"ungarbled":733.0},{"date":"2026-10-27","garbled":756.0,"ungarbled":736.0},{"date":"2026-10-28","garbled":758.0,"ungarbled":738.0},{"date":"2026-10-29","garbled":760.0,"ungarbled":740.0},{"date":"2026-10-30","garbled":760.0,"ungarbled":740.0},{"date":"2026-10-31","garbled":760.0,"ungarbled":740.0},{"date":"2026-11-04","garbled":757.0,"ungarbled":737.0},{"date":"2026-11-05","garbled":757.0,"ungarbled":737.0},{"date":"2026-11-06","garbled":758.0,"ungarbled":738.0}],"summary":{"cardamom":{"date":"2026-11-07","value":3197.76,"prev":3141.97,"prev_date":"2026-11-06","w":3009.9,"m":3246.09},"pepper_garbled":{"date":"2026-11-06","value":758.0,"prev":757.0,"prev_date":"2026-11-05","w":760.0,"m":724.0},"pepper_ungarbled":{"date":"2026-11-06","value":738.0,"prev":737.0,"prev_date":"2026-11-05","w":740.0,"m":704.0}},"alerts":[{"kind":"up","title":"Small Cardamom up 6.2% in a week","detail":"\u20b93,010 on 31 Oct \u2192 \u20b93,198 on 07 Nov (per kg)."},{"kind":"info","title":"Cardamom arrivals light this week","detail":"663 tonnes in the last 7 days vs 998 t in a usual week (previous 4 weeks). Less supply often pushes prices up."}]};
+
+const $ = (id) => document.getElementById(id);
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const rupee = (v) => v == null ? "–" : "₹" + Math.round(v).toLocaleString("en-IN");
+const parseDate = (s) => new Date(s + "T00:00:00");
+const shortDate = (s) => parseDate(s).toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+const longDate = (s) => parseDate(s).toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+$("updated").textContent = D.generated;
+
+/* ---- alerts ---- */
+(function renderAlerts() {
+  const box = $("alerts");
+  if (!D.alerts.length) {
+    box.innerHTML = '<div class="card alert"><div class="icon" aria-hidden="true">✓</div><div><b>No alerts today</b><span>Prices are moving within normal limits.</span></div></div>';
+    return;
+  }
+  const icon = { up: "▲", down: "▼", info: "i" };
+  const tag = { up: "Price rising", down: "Price falling", info: "Note" };
+  box.innerHTML = D.alerts.map((a) => `
+    <div class="card alert">
+      <div class="icon" aria-hidden="true">${icon[a.kind] || "i"}</div>
+      <div><div class="tag">${tag[a.kind] || "Note"}</div><b>${esc(a.title)}</b><span>${esc(a.detail)}</span></div>
+    </div>`).join("");
+})();
+
+/* ---- stat tiles ---- */
+function change(cur, ref) {
+  if (cur == null || ref == null) return "–";
+  const diff = cur - ref, p = (diff / ref) * 100;
+  if (Math.round(diff) === 0) return "no change";
+  const arrow = diff > 0 ? "▲" : "▼";
+  return `${arrow} ${rupee(Math.abs(diff))} (${Math.abs(p).toFixed(1)}%)`;
+}
+(function renderTiles() {
+  const defs = [
+    { key: "cardamom", name: "Small Cardamom", where: "E-auction average · Kerala / TN", color: "--series-1" },
+    { key: "pepper_garbled", name: "Black Pepper · Garbled", where: "Kochi market rate", color: "--series-1" },
+    { key: "pepper_ungarbled", name: "Black Pepper · Ungarbled", where: "Kochi market rate", color: "--series-2" },
+  ];
+  $("tiles").innerHTML = defs.map((d) => {
+    const s = D.summary[d.key];
+    if (!s) return `<div class="card tile"><div class="name">${d.name}</div><p class="none">No data yet.</p></div>`;
+    return `
+      <div class="card tile">
+        <div class="name"><span class="swatch" style="background:var(${d.color})"></span>${d.name}</div>
+        <div class="where">${d.where}</div>
+        <div class="value">${rupee(s.value)} <small>/ kg</small></div>
+        <div class="date">${longDate(s.date)}</div>
+        <dl>
+          <dt>vs previous day</dt><dd>${change(s.value, s.prev)}</dd>
+          <dt>vs 1 week ago</dt><dd>${change(s.value, s.w)}</dd>
+          <dt>vs 1 month ago</dt><dd>${change(s.value, s.m)}</dd>
+        </dl>
+      </div>`;
+  }).join("");
+})();
+
+/* ---- recent table ---- */
+(function renderTable() {
+  const byDate = {};
+  D.cardamom.forEach((r) => (byDate[r.date] = { ...(byDate[r.date] || {}), c: r }));
+  D.pepper.forEach((r) => (byDate[r.date] = { ...(byDate[r.date] || {}), p: r }));
+  const dates = Object.keys(byDate).sort().reverse().slice(0, 20);
+  const cell = (v, f) => v == null ? '<td class="na">–</td>' : `<td>${f(v)}</td>`;
+  $("recent").innerHTML =
+    "<thead><tr><th>Date</th><th>Cardamom avg</th><th>Cardamom max</th><th>Arrivals (t)</th><th>Pepper garbled</th><th>Pepper ungarbled</th></tr></thead><tbody>" +
+    dates.map((d) => {
+      const c = byDate[d].c || {}, p = byDate[d].p || {};
+      return `<tr><td>${longDate(d)}</td>${cell(c.avg, rupee)}${cell(c.max, rupee)}${cell(c.arrived, (v) => (v / 1000).toFixed(1))}${cell(p.garbled, rupee)}${cell(p.ungarbled, rupee)}</tr>`;
+    }).join("") + "</tbody>";
+})();
+
+/* ---- charts ---- */
+let charts = [];
+let rangeDays = 90;
+
+function inRange(rows) {
+  if (!rows.length) return rows;
+  const last = parseDate(rows[rows.length - 1].date);
+  const cutoff = new Date(last); cutoff.setDate(cutoff.getDate() - rangeDays);
+  return rows.filter((r) => parseDate(r.date) >= cutoff);
+}
+
+function baseOptions(yFormat, tooltipValue) {
+  return {
+    responsive: true, maintainAspectRatio: false, animation: false,
+    interaction: { mode: "index", intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: css("--surface"), titleColor: css("--ink"), bodyColor: css("--ink-2"),
+        borderColor: css("--axis"), borderWidth: 1, padding: 10, boxPadding: 4, usePointStyle: true,
+        callbacks: { label: (ctx) => ` ${ctx.dataset.label}: ${tooltipValue(ctx.parsed.y)}` },
+      },
+    },
+    scales: {
+      x: { grid: { display: false }, border: { color: css("--axis") },
+           ticks: { color: css("--muted"), maxRotation: 0, autoSkip: true, maxTicksLimit: 7 } },
+      y: { grid: { color: css("--grid") }, border: { display: false },
+           ticks: { color: css("--muted"), callback: yFormat, maxTicksLimit: 6 } },
+    },
+  };
+}
+
+function line(label, data, color) {
+  return { label, data, borderColor: color, backgroundColor: color, borderWidth: 2, tension: 0,
+           pointRadius: 0, pointHoverRadius: 5, pointHoverBorderWidth: 2,
+           pointHoverBorderColor: css("--surface"), spanGaps: true };
+}
+
+function drawCharts() {
+  charts.forEach((c) => c.destroy());
+  charts = [];
+  Chart.defaults.font.family = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+  const s1 = css("--series-1"), s2 = css("--series-2");
+
+  const c = inRange(D.cardamom);
+  const cOpts = baseOptions((v) => "₹" + v.toLocaleString("en-IN"), rupee);
+  cOpts.plugins.tooltip.callbacks.title = (items) => longDate(c[items[0].dataIndex].date);
+  charts.push(new Chart($("cardamomChart"), {
+    type: "line",
+    data: { labels: c.map((r) => shortDate(r.date)), datasets: [line("Auction average", c.map((r) => r.avg), s1)] },
+    options: cOpts,
+  }));
+
+  const aOpts = baseOptions((v) => v + " t", (v) => v.toFixed(1) + " tonnes");
+  aOpts.plugins.tooltip.callbacks.title = (items) => longDate(c[items[0].dataIndex].date);
+  aOpts.scales.y.beginAtZero = true;
+  charts.push(new Chart($("arrivalsChart"), {
+    type: "bar",
+    data: { labels: c.map((r) => shortDate(r.date)),
+            datasets: [{ label: "Arrivals", data: c.map((r) => r.arrived / 1000), backgroundColor: s1,
+                         borderRadius: { topLeft: 4, topRight: 4 }, borderSkipped: "start",
+                         maxBarThickness: 14, categoryPercentage: 0.85, barPercentage: 0.9 }] },
+    options: aOpts,
+  }));
+
+  const p = inRange(D.pepper);
+  const pOpts = baseOptions((v) => "₹" + v.toLocaleString("en-IN"), rupee);
+  pOpts.plugins.tooltip.callbacks.title = (items) => longDate(p[items[0].dataIndex].date);
+  pOpts.plugins.legend = { display: true, position: "top", align: "start",
+    labels: { color: css("--ink-2"), usePointStyle: true, pointStyle: "rectRounded", boxWidth: 10, boxHeight: 10 } };
+  charts.push(new Chart($("pepperChart"), {
+    type: "line",
+    data: { labels: p.map((r) => shortDate(r.date)),
+            datasets: [line("Garbled", p.map((r) => r.garbled), s1), line("Ungarbled", p.map((r) => r.ungarbled), s2)] },
+    options: pOpts,
+  }));
+}
+
+$("range").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  rangeDays = +b.dataset.days;
+  [...$("range").children].forEach((x) => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+  try { localStorage.setItem("spiceRange", rangeDays); } catch (_) {}
+  drawCharts();
+});
+try {
+  const saved = +localStorage.getItem("spiceRange");
+  const btn = saved && $("range").querySelector(`[data-days="${saved}"]`);
+  if (btn) { rangeDays = saved; [...$("range").children].forEach((x) => x.setAttribute("aria-pressed", x === btn ? "true" : "false")); }
+} catch (_) {}
+
+if (window.Chart) {
+  drawCharts();
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", drawCharts);
+} else {
+  document.querySelectorAll(".chart-box").forEach((b) => (b.innerHTML = '<p class="none">Charts need an internet connection. The table below still works.</p>'));
+}
+
+/* offline support when opened as an installed app (only on https, not when opened as a local file) */
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+# Private settings - contain the bot token / API keys. Never upload these.
+telegram_config.json
+whatsapp_config.json
+
+# Local-only files
+data/log.txt
+__pycache__/
+*.pyc
+dashboard.html

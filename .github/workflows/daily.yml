@@ -1,0 +1,56 @@
+name: Daily spice prices
+
+on:
+  schedule:
+    - cron: "30 7 * * *"    # 07:30 UTC = 1:00 PM India time, every day
+    - cron: "30 12 * * *"   # 12:30 UTC = 6:00 PM India time, every day
+  workflow_dispatch:          # "Run workflow" button on GitHub, to run it any time
+
+permissions:
+  contents: write   # save the new prices back into the repository
+  pages: write      # publish the app
+  id-token: write
+
+concurrency:
+  group: daily-prices
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      TZ: Asia/Kolkata
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch prices, build the app, send Telegram message
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHATS: ${{ secrets.TELEGRAM_CHATS }}
+          TELEGRAM_SEND: every_run   # a message at 1 PM and at 6 PM, saying what is new
+          APP_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+        run: python tracker.py
+
+      - name: Save the new prices in the repository
+        run: |
+          git config user.name "spice-price-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/prices.db data/notify_state.json site/index.html
+          git diff --cached --quiet || git commit -m "Prices for $(date +%d-%b-%Y)"
+          git push
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
