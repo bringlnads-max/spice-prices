@@ -556,10 +556,24 @@ def _whats_new(prev, cur, pepper):
     return "ℹ️ No new prices since the last update."
 
 
+def current_slot(now=None):
+    """Which update a run belongs to (India time): the 1 PM one or the 6 PM one.
+    Runs after midnight but before 12:30 PM still count as the previous day's 6 PM update."""
+    now = now or dt.datetime.now()
+    minutes = now.hour * 60 + now.minute
+    if minutes < 12 * 60 + 30:
+        return f"{now.date() - dt.timedelta(days=1)} 6 PM"
+    if minutes < 17 * 60 + 30:
+        return f"{now.date()} 1 PM"
+    return f"{now.date()} 6 PM"
+
+
 def notify(cardamom, pepper, alerts, force=False):
     """Send the price update on each set-up channel.
-    send = "every_run": a message every time (GitHub: 1 PM and 6 PM)
-    send = "daily":     only when a new day of prices appears
+    send = "every_slot": one message for the 1 PM update and one for the 6 PM update.
+                         Extra (late backup) runs in the same slot only refresh the app.
+    send = "every_run":  a message every time the tracker runs
+    send = "daily":      only when a new day of prices appears
     send = "alerts_only": only when there is an alert"""
     channels = _channels()
     if not channels:
@@ -567,9 +581,13 @@ def notify(cardamom, pepper, alerts, force=False):
         return
     state = _load_state()
     fp = _fingerprint(cardamom, pepper)
+    slot = current_slot()
     for channel, cfg, sender in channels:
         label = channel.capitalize()
         mode = cfg.get("send", "daily")
+        if not force and mode == "every_slot" and state.get(f"{channel}_slot") == slot:
+            print(f"{label}: the {slot} update was already sent. App refreshed, no new message.")
+            continue
         news = _whats_new(state.get(f"{channel}_fp"), fp, pepper)
         text, latest = build_message(cardamom, pepper, alerts, style=channel,
                                      app_url=cfg.get("app_url"), news=news)
@@ -586,6 +604,7 @@ def notify(cardamom, pepper, alerts, force=False):
         if sender(cfg, text):
             state[channel] = latest
             state[f"{channel}_fp"] = fp
+            state[f"{channel}_slot"] = slot
             _save_state(state)
 
 
@@ -632,7 +651,8 @@ def main():
         print()
         if fetch_problem:
             notify_problem(fetch_problem)
-        notify(cardamom, pepper, alerts, force=args.send_now)
+        force = args.send_now or os.environ.get("FORCE_SEND", "").lower() == "true"
+        notify(cardamom, pepper, alerts, force=force)
 
 
 if __name__ == "__main__":

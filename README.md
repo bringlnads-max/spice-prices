@@ -14,7 +14,13 @@ Every day at **1:00 PM and 6:00 PM India time**, GitHub runs this tracker automa
 and sends a Telegram update. Each message says what's new since the previous one
 (e.g. "🆕 1 new cardamom auction"). No PC needs to be on.
 
-To change the times, edit the two `cron:` lines in `daily.yml`. They're in UTC: India time minus 5:30.
+**Timer:** GitHub's own schedule often starts hours late, so a free **cron-job.org** job starts the
+workflow at exactly 1:00 PM and 6:00 PM (a POST to the GitHub API with `{"ref":"main","inputs":{"mode":"scheduled"}}`,
+using a fine-grained GitHub token that can only run Actions on this repo). GitHub's schedule (1:15 / 6:15 PM)
+stays as a backup. A late backup run only refreshes the app and never sends a second message for the same
+update. Pressing **Run workflow** by hand always sends a message.
+
+To change the times, change them in cron-job.org (and the backup `cron:` lines in `daily.yml`, which are in UTC, India time minus 5:30).
 
 - **App link:** `https://<github-username>.github.io/<repository-name>/`
 - **Install on phone:** open the link in Chrome, then tap ⋮ and **Add to Home screen** (on iPhone: Safari, then Share, then **Add to Home Screen**).

@@ -1,17 +1,25 @@
 name: Daily spice prices
 
 on:
+  # Main timer: cron-job.org starts this workflow at exactly 1:00 PM and 6:00 PM India time
+  # (with mode = scheduled). GitHub's own schedule below is only a BACKUP: it often starts
+  # hours late, and then it just refreshes the app without sending a second message.
   schedule:
-    - cron: "30 7 * * *"    # 07:30 UTC = 1:00 PM India time, every day
-    - cron: "30 12 * * *"   # 12:30 UTC = 6:00 PM India time, every day
-  workflow_dispatch:          # "Run workflow" button on GitHub, to run it any time
+    - cron: "45 7 * * *"    # backup for the 1 PM update (07:45 UTC = 1:15 PM India time)
+    - cron: "45 12 * * *"   # backup for the 6 PM update (12:45 UTC = 6:15 PM India time)
+  workflow_dispatch:          # "Run workflow" button on GitHub (always sends a message)
+    inputs:
+      mode:
+        description: "manual = always send a message; scheduled = one message per 1 PM / 6 PM update"
+        required: false
+        default: manual
 
 permissions:
   contents: write   # save the new prices back into the repository
   pages: write      # publish the app
   id-token: write
 
-concurrency:
+concurrency:            # runs wait for each other, so two runs never clash
   group: daily-prices
   cancel-in-progress: false
 
@@ -34,7 +42,8 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHATS: ${{ secrets.TELEGRAM_CHATS }}
-          TELEGRAM_SEND: every_run   # a message at 1 PM and at 6 PM, saying what is new
+          TELEGRAM_SEND: every_slot   # one message for the 1 PM update, one for the 6 PM update
+          FORCE_SEND: ${{ github.event_name == 'workflow_dispatch' && inputs.mode != 'scheduled' }}
           APP_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
         run: python tracker.py
 
